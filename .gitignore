@@ -1,0 +1,8 @@
+.gocache/
+tmp/
+bin/
+*.exe
+work/*.log
+work/*.wav
+.agents/
+.codex/
