@@ -1,0 +1,11 @@
+.git
+.gocache
+tmp
+bin
+work
+__pycache__
+*.pyc
+.agents
+.codex
+secrets
+*.log

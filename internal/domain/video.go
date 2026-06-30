@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 type Video struct {
 	SourceURL   string `json:"source_url"`
 	ResolvedURL string `json:"resolved_url,omitempty"`
@@ -35,4 +37,36 @@ type SummaryResult struct {
 	Video      Video               `json:"video"`
 	Transcript []TranscriptSegment `json:"transcript"`
 	Summary    Summary             `json:"summary"`
+}
+
+type JobStatus string
+
+const (
+	JobStatusQueued    JobStatus = "queued"
+	JobStatusRunning   JobStatus = "running"
+	JobStatusSucceeded JobStatus = "succeeded"
+	JobStatusFailed    JobStatus = "failed"
+	JobStatusCanceled  JobStatus = "canceled"
+)
+
+type SummaryJob struct {
+	ID         string         `json:"id"`
+	SourceURL  string         `json:"source_url"`
+	Status     JobStatus      `json:"status"`
+	Result     *SummaryResult `json:"result,omitempty"`
+	Error      string         `json:"error,omitempty"`
+	Attempts   int            `json:"attempts"`
+	CreatedAt  time.Time      `json:"created_at"`
+	StartedAt  *time.Time     `json:"started_at,omitempty"`
+	FinishedAt *time.Time     `json:"finished_at,omitempty"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+}
+
+type JobStats struct {
+	Queued    int `json:"queued"`
+	Running   int `json:"running"`
+	Succeeded int `json:"succeeded"`
+	Failed    int `json:"failed"`
+	Canceled  int `json:"canceled"`
+	Total     int `json:"total"`
 }

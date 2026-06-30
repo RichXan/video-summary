@@ -4,46 +4,61 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
-	Addr             string
-	Mode             string
-	VideoResolver    string
-	VideoCommand     string
-	VideoArgs        []string
-	MediaPreparer    string
-	MediaCommand     string
-	MediaArgs        []string
-	ASRBaseURL       string
-	ASRCommand       string
-	ASRArgs          []string
-	ASRModel         string
-	SummaryMode      string
-	SummaryBaseURL   string
-	SummaryAuthToken string
-	SummaryModel     string
+	Addr               string
+	Role               string
+	DatabaseURL        string
+	Mode               string
+	VideoResolver      string
+	VideoCommand       string
+	VideoArgs          []string
+	MediaPreparer      string
+	MediaCommand       string
+	MediaArgs          []string
+	ASRBaseURL         string
+	ASRCommand         string
+	ASRArgs            []string
+	ASRModel           string
+	SummaryMode        string
+	SummaryBaseURL     string
+	SummaryAuthToken   string
+	SummaryModel       string
+	WorkerID           string
+	WorkerConcurrency  int
+	WorkerPollInterval time.Duration
+	JobTimeout         time.Duration
+	LogFormat          string
 }
 
 func Load() Config {
 	summaryBaseURL := firstEnv("SUMMARY_BASE_URL", "ANTHROPIC_BASE_URL")
 	return Config{
-		Addr:             env("ADDR", ":8080"),
-		Mode:             env("MODE", "mock"),
-		VideoResolver:    env("VIDEO_RESOLVER", "mock"),
-		VideoCommand:     os.Getenv("VIDEO_COMMAND"),
-		VideoArgs:        splitArgs(os.Getenv("VIDEO_ARGS")),
-		MediaPreparer:    env("MEDIA_PREPARER", "mock"),
-		MediaCommand:     os.Getenv("MEDIA_COMMAND"),
-		MediaArgs:        splitArgs(os.Getenv("MEDIA_ARGS")),
-		ASRBaseURL:       os.Getenv("ASR_BASE_URL"),
-		ASRCommand:       os.Getenv("ASR_COMMAND"),
-		ASRArgs:          splitArgs(os.Getenv("ASR_ARGS")),
-		ASRModel:         env("ASR_MODEL", "whisper-1"),
-		SummaryMode:      env("SUMMARY_MODE", "template"),
-		SummaryBaseURL:   summaryBaseURL,
-		SummaryAuthToken: firstEnv("SUMMARY_AUTH_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
-		SummaryModel:     summaryModel(summaryBaseURL),
+		Addr:               env("ADDR", ":8080"),
+		Role:               env("APP_ROLE", "api"),
+		DatabaseURL:        firstEnv("DATABASE_URL", "POSTGRES_DSN"),
+		Mode:               env("MODE", "mock"),
+		VideoResolver:      env("VIDEO_RESOLVER", "mock"),
+		VideoCommand:       os.Getenv("VIDEO_COMMAND"),
+		VideoArgs:          splitArgs(os.Getenv("VIDEO_ARGS")),
+		MediaPreparer:      env("MEDIA_PREPARER", "mock"),
+		MediaCommand:       os.Getenv("MEDIA_COMMAND"),
+		MediaArgs:          splitArgs(os.Getenv("MEDIA_ARGS")),
+		ASRBaseURL:         os.Getenv("ASR_BASE_URL"),
+		ASRCommand:         os.Getenv("ASR_COMMAND"),
+		ASRArgs:            splitArgs(os.Getenv("ASR_ARGS")),
+		ASRModel:           env("ASR_MODEL", "whisper-1"),
+		SummaryMode:        env("SUMMARY_MODE", "template"),
+		SummaryBaseURL:     summaryBaseURL,
+		SummaryAuthToken:   firstSecret("SUMMARY_AUTH_TOKEN_FILE", "ANTHROPIC_AUTH_TOKEN_FILE", "SUMMARY_AUTH_TOKEN", "OPENAI_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
+		SummaryModel:       summaryModel(summaryBaseURL),
+		WorkerID:           os.Getenv("WORKER_ID"),
+		WorkerConcurrency:  EnvInt("WORKER_CONCURRENCY", 1),
+		WorkerPollInterval: EnvDuration("WORKER_POLL_INTERVAL", 5*time.Second),
+		JobTimeout:         EnvDuration("JOB_TIMEOUT", 30*time.Minute),
+		LogFormat:          env("LOG_FORMAT", "json"),
 	}
 }
 
@@ -59,6 +74,24 @@ func firstEnv(keys ...string) string {
 		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 			return value
 		}
+	}
+	return ""
+}
+
+func firstSecret(keys ...string) string {
+	for _, key := range keys {
+		value := strings.TrimSpace(os.Getenv(key))
+		if value == "" {
+			continue
+		}
+		if strings.HasSuffix(key, "_FILE") {
+			data, err := os.ReadFile(value)
+			if err != nil {
+				continue
+			}
+			return strings.TrimSpace(string(data))
+		}
+		return value
 	}
 	return ""
 }
@@ -107,6 +140,18 @@ func splitArgs(value string) []string {
 
 func EnvInt(key string, fallback int) int {
 	value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(key)))
+	if err != nil {
+		return fallback
+	}
+	return value
+}
+
+func EnvDuration(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	value, err := time.ParseDuration(raw)
 	if err != nil {
 		return fallback
 	}

@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestSplitArgsPreservesQuotedValues(t *testing.T) {
 	t.Parallel()
@@ -70,5 +73,19 @@ func TestLoadPrefersExplicitSummaryEnvOverAnthropicEnv(t *testing.T) {
 	}
 	if cfg.SummaryModel != "qwen" {
 		t.Fatalf("SummaryModel = %q", cfg.SummaryModel)
+	}
+}
+
+func TestLoadReadsSummaryAuthTokenFromFile(t *testing.T) {
+	path := t.TempDir() + "/token.txt"
+	if err := os.WriteFile(path, []byte("file-token\n"), 0o600); err != nil {
+		t.Fatalf("write token: %v", err)
+	}
+	t.Setenv("SUMMARY_AUTH_TOKEN_FILE", path)
+
+	cfg := Load()
+
+	if cfg.SummaryAuthToken != "file-token" {
+		t.Fatalf("SummaryAuthToken = %q", cfg.SummaryAuthToken)
 	}
 }

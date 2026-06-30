@@ -26,6 +26,66 @@ Invoke-RestMethod `
   -Body '{"url":"https://v.douyin.com/demo/"}'
 ```
 
+## Async Production-Style Mode
+
+The synchronous endpoint is useful for local smoke tests, but production-style runs should use the job API with a worker and PostgreSQL-backed queue.
+
+Create a job:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:8080/api/v1/jobs `
+  -ContentType 'application/json; charset=utf-8' `
+  -Body '{"url":"https://v.douyin.com/demo/"}'
+```
+
+Check status:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/api/v1/jobs/<job_id>
+```
+
+Operational endpoints:
+
+- `GET /healthz`: process is alive.
+- `GET /readyz`: API is ready.
+- `GET /metrics`: Prometheus-style service and job counters.
+
+### Docker Compose
+
+Prepare local secrets:
+
+```powershell
+Copy-Item .env.example .env
+New-Item -ItemType Directory -Force secrets
+Copy-Item D:\Downloads\douyin-firefox-cookies.txt secrets\douyin-cookies.txt
+Set-Content -Path secrets\llm-token.txt -Value "<your relay token>"
+```
+
+Edit `.env` and set the LLM relay URL/model values, for example:
+
+```text
+ANTHROPIC_BASE_URL=https://your-relay.example.com
+SUMMARY_MODEL=chatgpt5.5
+```
+
+Start the production-style stack:
+
+```powershell
+docker compose --env-file .env up --build
+```
+
+This starts:
+
+- `postgres`: persistent job/result database.
+- `api`: receives jobs and exposes health/readiness/metrics.
+- `worker`: claims queued jobs, downloads media, runs ASR, and calls the summarizer.
+
+Resource controls are configured in `docker-compose.yml` with per-service `cpus`, `mem_limit`, `WORKER_CONCURRENCY`, `WORKER_POLL_INTERVAL`, and `JOB_TIMEOUT`.
+
+Secrets and cookies are mounted through Docker secrets. Real files under `secrets/` are ignored by git; do not commit cookie exports or API tokens. The application also supports `SUMMARY_AUTH_TOKEN_FILE` and `ANTHROPIC_AUTH_TOKEN_FILE` for secret-file based deployments.
+
 ## Web Metadata Mode
 
 Use this mode to resolve a real video page and extract metadata before the mock ASR step:

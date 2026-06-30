@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: video_summary
+      POSTGRES_USER: video_summary
+      POSTGRES_PASSWORD: video_summary
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U video_summary -d video_summary"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    mem_limit: 512m
+    cpus: "1.0"
+
+  api:
+    build: .
+    command: ["video-summary-api"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ROLE: api
+      ADDR: :8080
+      DATABASE_URL: postgres://video_summary:video_summary@postgres:5432/video_summary?sslmode=disable
+      LOG_FORMAT: json
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=3).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    mem_limit: 256m
+    cpus: "1.0"
+
+  worker:
+    build: .
+    command: ["video-summary-worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ROLE: worker
+      DATABASE_URL: postgres://video_summary:video_summary@postgres:5432/video_summary?sslmode=disable
+      LOG_FORMAT: json
+      WORKER_ID: docker-worker
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+      WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL:-5s}
+      JOB_TIMEOUT: ${JOB_TIMEOUT:-45m}
+
+      VIDEO_RESOLVER: mock
+      MEDIA_PREPARER: command
+      MEDIA_COMMAND: python
+      MEDIA_ARGS: scripts/prepare_media_jiji.py {url}
+      JIJI_REPO: /opt/douyin-downloader
+      JIJI_PYTHON: python
+      DOUYIN_COOKIES: /run/secrets/douyin_cookies
+      MEDIA_WORKDIR: /data/work
+
+      MODE: command
+      ASR_COMMAND: python
+      ASR_ARGS: scripts/transcribe_faster_whisper.py {audio} --model ${WHISPER_MODEL:-small} --language zh --device ${WHISPER_DEVICE:-cpu} --compute-type ${WHISPER_COMPUTE_TYPE:-int8}
+
+      SUMMARY_MODE: ${SUMMARY_MODE:-http}
+      SUMMARY_BASE_URL: ${SUMMARY_BASE_URL:-}
+      SUMMARY_AUTH_TOKEN_FILE: /run/secrets/llm_token
+      SUMMARY_MODEL: ${SUMMARY_MODEL:-chatgpt5.5}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+    secrets:
+      - douyin_cookies
+      - llm_token
+    volumes:
+      - worker-data:/data/work
+    mem_limit: 6g
+    cpus: "4.0"
+
+secrets:
+  douyin_cookies:
+    file: ./secrets/douyin-cookies.txt
+  llm_token:
+    file: ./secrets/llm-token.txt
+
+volumes:
+  postgres-data:
+  worker-data:
