@@ -68,6 +68,7 @@ func (s *Service) Summarize(ctx context.Context, input SummarizeInput) (domain.S
 	if err != nil {
 		return domain.SummaryResult{}, err
 	}
+	video = applyMediaMetadata(video, media)
 
 	transcript, err := s.asr.Transcribe(ctx, media)
 	if err != nil {
@@ -84,4 +85,20 @@ func (s *Service) Summarize(ctx context.Context, input SummarizeInput) (domain.S
 		Transcript: transcript,
 		Summary:    summary,
 	}, nil
+}
+
+func applyMediaMetadata(video domain.Video, media domain.MediaAsset) domain.Video {
+	if strings.TrimSpace(media.ResolvedURL) != "" {
+		video.ResolvedURL = strings.TrimSpace(media.ResolvedURL)
+	}
+	if strings.TrimSpace(media.Title) != "" {
+		video.Title = strings.TrimSpace(media.Title)
+	}
+	if strings.TrimSpace(media.Author) != "" {
+		video.Author = strings.TrimSpace(media.Author)
+	}
+	if media.Duration > 0 {
+		video.Duration = media.Duration
+	}
+	return video
 }

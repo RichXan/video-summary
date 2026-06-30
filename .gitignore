@@ -2,7 +2,10 @@
 tmp/
 bin/
 *.exe
+__pycache__/
+*.pyc
 work/*.log
 work/*.wav
+work/real/
 .agents/
 .codex/

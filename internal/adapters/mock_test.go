@@ -33,3 +33,27 @@ func TestTemplateSummarizerBuildsStructuredSummary(t *testing.T) {
 		t.Fatal("quotes should not be empty")
 	}
 }
+
+func TestTemplateSummarizerUsesTranscriptContentInOutline(t *testing.T) {
+	t.Parallel()
+
+	summarizer := TemplateSummarizer{}
+	transcript := []domain.TranscriptSegment{
+		{Text: "Dollar dominance depends on oil pricing."},
+		{Text: "SWIFT and treasury markets form the payment pipe."},
+		{Text: "Central banks are buying gold as a hedge."},
+	}
+
+	result, err := summarizer.Summarize(context.Background(), domain.Video{Title: "Dollar system"}, transcript)
+	if err != nil {
+		t.Fatalf("Summarize returned error: %v", err)
+	}
+
+	joined := strings.Join(append(result.Outline, result.Analysis), "\n")
+	if !strings.Contains(joined, "oil pricing") {
+		t.Fatalf("summary should include transcript content, got: %#v", result)
+	}
+	if strings.Contains(strings.ToLower(joined), "smoke") {
+		t.Fatalf("summary should not describe itself as a smoke test: %#v", result)
+	}
+}

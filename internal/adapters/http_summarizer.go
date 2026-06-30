@@ -14,9 +14,10 @@ import (
 )
 
 type HTTPSummarizer struct {
-	BaseURL string
-	Model   string
-	Client  *http.Client
+	BaseURL   string
+	Model     string
+	AuthToken string
+	Client    *http.Client
 }
 
 type chatRequest struct {
@@ -36,6 +37,8 @@ type chatResponse struct {
 	} `json:"choices"`
 }
 
+const maxSummaryPromptRunes = 24000
+
 func (s HTTPSummarizer) Summarize(ctx context.Context, video domain.Video, transcript []domain.TranscriptSegment) (domain.Summary, error) {
 	if strings.TrimSpace(s.BaseURL) == "" {
 		return domain.Summary{}, errors.New("summary base url is not configured")
@@ -47,7 +50,7 @@ func (s HTTPSummarizer) Summarize(ctx context.Context, video domain.Video, trans
 		Messages: []chatMessage{
 			{
 				Role:    "system",
-				Content: "You summarize transcripts. Return compact JSON with keys: one_line, outline, quotes, viewpoints, analysis.",
+				Content: "你是中文视频内容分析助手。只返回 JSON，不要 Markdown。字段必须包含 one_line, outline, quotes, viewpoints, analysis。outline/quotes/viewpoints 使用字符串数组。",
 			},
 			{
 				Role:    "user",
@@ -66,6 +69,9 @@ func (s HTTPSummarizer) Summarize(ctx context.Context, video domain.Video, trans
 		return domain.Summary{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if token := strings.TrimSpace(s.AuthToken); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	client := s.Client
 	if client == nil {
@@ -95,7 +101,7 @@ func (s HTTPSummarizer) Summarize(ctx context.Context, video domain.Video, trans
 
 	content := strings.TrimSpace(parsed.Choices[0].Message.Content)
 	var summary domain.Summary
-	if err := json.Unmarshal([]byte(content), &summary); err == nil && strings.TrimSpace(summary.OneLine) != "" {
+	if err := json.Unmarshal([]byte(extractJSONContent(content)), &summary); err == nil && strings.TrimSpace(summary.OneLine) != "" {
 		return summary, nil
 	}
 	if content == "" {
@@ -106,6 +112,8 @@ func (s HTTPSummarizer) Summarize(ctx context.Context, video domain.Video, trans
 
 func buildSummaryPrompt(video domain.Video, transcript []domain.TranscriptSegment) string {
 	var b strings.Builder
+	b.WriteString("请根据下面的视频信息和逐字稿，输出紧凑但有信息密度的中文 JSON 摘要。\n")
+	b.WriteString("要求：one_line 为一句话总结；outline 给 4-6 个关键要点；quotes 给 2-4 句代表性原话；viewpoints 给主要观点/立场；analysis 给简短分析。\n\n")
 	b.WriteString("Video title: ")
 	b.WriteString(video.Title)
 	b.WriteString("\nAuthor: ")
@@ -118,5 +126,63 @@ func buildSummaryPrompt(video domain.Video, transcript []domain.TranscriptSegmen
 			b.WriteByte('\n')
 		}
 	}
-	return b.String()
+	return capSummaryPrompt(b.String())
+}
+
+func capSummaryPrompt(prompt string) string {
+	runes := []rune(prompt)
+	if len(runes) <= maxSummaryPromptRunes {
+		return prompt
+	}
+	headSize := maxSummaryPromptRunes * 2 / 3
+	tailSize := maxSummaryPromptRunes - headSize
+	head := string(runes[:headSize])
+	tail := string(runes[len(runes)-tailSize:])
+	return head + "\n\n[Transcript truncated: middle content omitted to fit the LLM context window.]\n\n" + tail
+}
+
+func extractJSONContent(content string) string {
+	trimmed := strings.TrimSpace(content)
+	if strings.HasPrefix(trimmed, "```") {
+		lines := strings.Split(trimmed, "\n")
+		if len(lines) >= 3 {
+			lines = lines[1:]
+			if strings.HasPrefix(strings.TrimSpace(lines[len(lines)-1]), "```") {
+				lines = lines[:len(lines)-1]
+			}
+			return strings.TrimSpace(strings.Join(lines, "\n"))
+		}
+	}
+	start := strings.Index(trimmed, "{")
+	end := strings.LastIndex(trimmed, "}")
+	if start >= 0 && end > start {
+		return strings.TrimSpace(trimmed[start : end+1])
+	}
+	return trimmed
+}
+
+type FallbackSummarizer struct {
+	Primary interface {
+		Summarize(context.Context, domain.Video, []domain.TranscriptSegment) (domain.Summary, error)
+	}
+	Fallback interface {
+		Summarize(context.Context, domain.Video, []domain.TranscriptSegment) (domain.Summary, error)
+	}
+}
+
+func (s FallbackSummarizer) Summarize(ctx context.Context, video domain.Video, transcript []domain.TranscriptSegment) (domain.Summary, error) {
+	if s.Primary == nil {
+		if s.Fallback == nil {
+			return domain.Summary{}, errors.New("summary fallback is not configured")
+		}
+		return s.Fallback.Summarize(ctx, video, transcript)
+	}
+	summary, err := s.Primary.Summarize(ctx, video, transcript)
+	if err == nil {
+		return summary, nil
+	}
+	if s.Fallback == nil {
+		return domain.Summary{}, err
+	}
+	return s.Fallback.Summarize(ctx, video, transcript)
 }

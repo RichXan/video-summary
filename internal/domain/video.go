@@ -1,16 +1,20 @@
 package domain
 
 type Video struct {
-	SourceURL  string `json:"source_url"`
+	SourceURL   string `json:"source_url"`
 	ResolvedURL string `json:"resolved_url,omitempty"`
-	Title      string `json:"title"`
-	Author     string `json:"author"`
-	Duration   int    `json:"duration"`
+	Title       string `json:"title"`
+	Author      string `json:"author"`
+	Duration    int    `json:"duration"`
 }
 
 type MediaAsset struct {
-	VideoPath string `json:"video_path,omitempty"`
-	AudioPath string `json:"audio_path"`
+	VideoPath   string `json:"video_path,omitempty"`
+	AudioPath   string `json:"audio_path"`
+	ResolvedURL string `json:"resolved_url,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Author      string `json:"author,omitempty"`
+	Duration    int    `json:"duration,omitempty"`
 }
 
 type TranscriptSegment struct {

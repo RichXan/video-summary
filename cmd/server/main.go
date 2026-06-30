@@ -35,7 +35,10 @@ func main() {
 
 	summarizer := app.Summarizer(adapters.TemplateSummarizer{})
 	if strings.EqualFold(cfg.SummaryMode, "http") {
-		summarizer = adapters.HTTPSummarizer{BaseURL: cfg.SummaryBaseURL, Model: cfg.SummaryModel}
+		summarizer = adapters.FallbackSummarizer{
+			Primary:  adapters.HTTPSummarizer{BaseURL: cfg.SummaryBaseURL, Model: cfg.SummaryModel, AuthToken: cfg.SummaryAuthToken},
+			Fallback: adapters.TemplateSummarizer{},
+		}
 	}
 
 	service := app.NewService(app.ServiceDeps{

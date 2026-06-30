@@ -108,6 +108,145 @@ ffmpeg -y -i work/input.mp4 -vn -ac 1 -ar 16000 "$2"
 printf '%s\n' "$2"
 ```
 
+## Real Douyin Pipeline
+
+The real pipeline needs external tools and, for many Douyin links, fresh cookies. The
+recommended downloader path is `jiji262/douyin-downloader`, because it succeeds on
+links that currently fail with `yt-dlp`'s Douyin extractor.
+
+Required local pieces:
+
+- `jiji262/douyin-downloader` for resolving and downloading Douyin videos.
+- `imageio-ffmpeg` from the downloader environment for converting video to `16kHz` mono WAV.
+- `faster-whisper` for local ASR, or another command/HTTP ASR adapter.
+- Optional: an OpenAI-compatible LLM service, such as Ollama, LM Studio, vLLM, Qwen, or DeepSeek.
+
+Douyin often rejects bare URL downloads. The most reliable cookie path tested for this MVP is:
+
+1. Install Firefox.
+2. Log in to `https://www.douyin.com/`.
+3. Confirm the target video plays in Firefox.
+4. Close Firefox.
+5. Export cookies with `yt-dlp --cookies-from-browser firefox --cookies D:\Downloads\douyin-firefox-cookies.txt ...`, or export a Netscape `cookies.txt` file with a trusted browser extension.
+
+### Recommended Windows Setup
+
+```powershell
+git clone https://github.com/jiji262/douyin-downloader.git D:\Tools\douyin-downloader
+
+py -m venv D:\Tools\douyin-downloader\.venv
+& D:\Tools\douyin-downloader\.venv\Scripts\python.exe -m pip install `
+  -r D:\Tools\douyin-downloader\requirements.txt `
+  fastapi uvicorn playwright httpx
+
+py -m venv D:\Tools\video-summary-asr
+& D:\Tools\video-summary-asr\Scripts\python.exe -m pip install faster-whisper
+```
+
+Then start this service:
+
+```powershell
+$env:VIDEO_RESOLVER="mock"
+
+$env:MEDIA_PREPARER="command"
+$env:MEDIA_COMMAND="py"
+$env:MEDIA_ARGS="scripts\prepare_media_jiji.py {url}"
+$env:JIJI_REPO="D:\Tools\douyin-downloader"
+$env:JIJI_PYTHON="D:\Tools\douyin-downloader\.venv\Scripts\python.exe"
+$env:DOUYIN_COOKIES="D:\Downloads\douyin-firefox-cookies.txt"
+$env:MEDIA_WORKDIR="work\real"
+
+$env:MODE="command"
+$env:ASR_COMMAND="D:\Tools\video-summary-asr\Scripts\python.exe"
+$env:ASR_ARGS="scripts\transcribe_faster_whisper.py {audio} --model small --language zh"
+
+$env:SUMMARY_MODE="template"
+
+go run ./cmd/server
+```
+
+Call the API:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:8080/api/v1/videos/summarize `
+  -ContentType 'application/json; charset=utf-8' `
+  -Body '{"url":"https://www.douyin.com/video/7655554393391537802"}'
+```
+
+The default template summarizer is extractive and grounded in the real transcript. For deeper synthesis, run an OpenAI-compatible LLM service and set `SUMMARY_MODE=http`.
+
+To use an OpenAI-compatible relay that exposes Chat Completions with Anthropic-style environment names:
+
+```powershell
+$env:SUMMARY_MODE="http"
+$env:ANTHROPIC_BASE_URL="https://your-relay.example.com"
+$env:ANTHROPIC_AUTH_TOKEN="<your relay token>"
+$env:SUMMARY_MODEL="chatgpt5.5"
+```
+
+`SUMMARY_BASE_URL`, `SUMMARY_AUTH_TOKEN`, and `SUMMARY_MODEL` take precedence when set. If only `ANTHROPIC_BASE_URL` is set, the default summary model is `chatgpt5.5`.
+
+### yt-dlp Fallback
+
+`yt-dlp` is still supported through the generic command scripts, but current Douyin links may fail with `Fresh cookies are needed` even when cookies are valid.
+
+```powershell
+$env:YTDLP_COOKIES="C:\path\to\douyin-cookies.txt"
+
+$env:VIDEO_RESOLVER="command"
+$env:VIDEO_COMMAND="powershell"
+$env:VIDEO_ARGS="-ExecutionPolicy Bypass -File scripts\resolve-video.ps1 {url}"
+
+$env:MEDIA_PREPARER="command"
+$env:MEDIA_COMMAND="powershell"
+$env:MEDIA_ARGS="-ExecutionPolicy Bypass -File scripts\prepare-media.ps1 {resolved_url}"
+$env:MEDIA_WORKDIR="work\real"
+
+$env:MODE="http"
+$env:ASR_BASE_URL="http://localhost:18081"
+$env:ASR_MODEL="whisper-1"
+
+$env:SUMMARY_MODE="http"
+$env:SUMMARY_BASE_URL="http://localhost:18082"
+$env:SUMMARY_MODEL="qwen"
+
+go run ./cmd/server
+```
+
+### Linux, macOS, or WSL
+
+```bash
+export VIDEO_RESOLVER=command
+export VIDEO_COMMAND=./scripts/resolve-video.sh
+export VIDEO_ARGS='{url}'
+
+export MEDIA_PREPARER=command
+export MEDIA_COMMAND=./scripts/prepare-media.sh
+export MEDIA_ARGS='{resolved_url}'
+export MEDIA_WORKDIR=work/real
+
+export MODE=http
+export ASR_BASE_URL=http://localhost:18081
+export ASR_MODEL=whisper-1
+
+export SUMMARY_MODE=http
+export SUMMARY_BASE_URL=http://localhost:18082
+export SUMMARY_MODEL=qwen
+
+go run ./cmd/server
+```
+
+The helper scripts also accept:
+
+- `YTDLP_BIN` to use a non-`PATH` `yt-dlp` binary.
+- `FFMPEG_BIN` to use a non-`PATH` `ffmpeg` binary.
+- `YTDLP_COOKIES` for a Netscape cookie file.
+- `YTDLP_COOKIES_FROM_BROWSER` for `yt-dlp --cookies-from-browser`.
+
+If `yt-dlp` returns `Fresh cookies are needed`, the service is configured correctly but Douyin is blocking anonymous access. Provide a fresh cookie file and retry.
+
 ## Command ASR Mode
 
 The command adapter expects stdout to be either plain transcript text or JSON:
@@ -166,6 +305,18 @@ $env:SUMMARY_BASE_URL="http://localhost:11434"
 $env:SUMMARY_MODEL="qwen"
 go run ./cmd/server
 ```
+
+For hosted or relay services that need bearer authentication:
+
+```powershell
+$env:SUMMARY_MODE="http"
+$env:SUMMARY_BASE_URL="https://your-openai-compatible-endpoint"
+$env:SUMMARY_AUTH_TOKEN="<your token>"
+$env:SUMMARY_MODEL="chatgpt5.5"
+go run ./cmd/server
+```
+
+The service also accepts `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_MODEL` as aliases for relay deployments that use those names. Tokens are read only from environment variables and should not be committed.
 
 The model should return JSON in the assistant message:
 

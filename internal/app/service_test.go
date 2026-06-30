@@ -40,6 +40,34 @@ func TestServiceSummarizeRunsPipeline(t *testing.T) {
 	}
 }
 
+func TestServiceSummarizeAppliesMediaMetadata(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(ServiceDeps{
+		Video: fakeVideoResolver{},
+		Media: fakeMediaPreparerWithMetadata{},
+		ASR:   fakeTranscriber{},
+		Summarizer: fakeSummarizer{
+			result: domain.Summary{OneLine: "summary"},
+		},
+	})
+
+	result, err := service.Summarize(context.Background(), SummarizeInput{URL: "https://v.douyin.com/demo/"})
+	if err != nil {
+		t.Fatalf("Summarize returned error: %v", err)
+	}
+
+	if result.Video.Title != "Downloaded title" {
+		t.Fatalf("title = %q, want media metadata title", result.Video.Title)
+	}
+	if result.Video.Author != "Downloaded author" {
+		t.Fatalf("author = %q, want media metadata author", result.Video.Author)
+	}
+	if result.Video.Duration != 503 {
+		t.Fatalf("duration = %d, want media metadata duration", result.Video.Duration)
+	}
+}
+
 func TestServiceSummarizeReturnsDependencyError(t *testing.T) {
 	t.Parallel()
 
@@ -80,6 +108,17 @@ type fakeMediaPreparer struct{}
 
 func (fakeMediaPreparer) Prepare(ctx context.Context, video domain.Video) (domain.MediaAsset, error) {
 	return domain.MediaAsset{AudioPath: "demo.wav"}, nil
+}
+
+type fakeMediaPreparerWithMetadata struct{}
+
+func (fakeMediaPreparerWithMetadata) Prepare(ctx context.Context, video domain.Video) (domain.MediaAsset, error) {
+	return domain.MediaAsset{
+		AudioPath: "demo.wav",
+		Title:     "Downloaded title",
+		Author:    "Downloaded author",
+		Duration:  503,
+	}, nil
 }
 
 type fakeTranscriber struct{}

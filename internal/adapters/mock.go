@@ -48,20 +48,14 @@ func (TemplateSummarizer) Summarize(ctx context.Context, video domain.Video, tra
 	}
 
 	return domain.Summary{
-		OneLine: fmt.Sprintf("%s is summarized from transcript text. Core signal: %s", title, trimRunes(first, 80)),
-		Outline: []string{
-			"Video metadata and transcript input are available to the pipeline.",
-			"The transcript is condensed into main points and information hierarchy.",
-			"The template summarizer can later be replaced by OpenAI, Ollama, Qwen, or DeepSeek.",
-		},
-		Quotes: []string{
-			trimRunes(first, 80),
-		},
+		OneLine: fmt.Sprintf("%s: %s", title, trimRunes(first, 96)),
+		Outline: extractivePoints(transcript, 5),
+		Quotes:  extractivePoints(transcript, 3),
 		Viewpoints: []string{
-			"The MVP validates the orchestration path before replacing ASR and LLM components.",
-			"Structured summaries should be grounded in full transcripts, not only title or captions.",
+			"Key claims are extracted directly from the transcript.",
+			"Use an LLM summarizer for deeper synthesis, but this result is grounded in the real ASR output.",
 		},
-		Analysis: fmt.Sprintf("Transcript length is about %d runes. The template summarizer is for smoke tests; production should use an LLM adapter.", len([]rune(text))),
+		Analysis: fmt.Sprintf("Extractive summary built from %d transcript segments and about %d runes.", len(transcript), len([]rune(text))),
 	}, nil
 }
 
@@ -90,4 +84,36 @@ func trimRunes(value string, max int) string {
 		return string(runes)
 	}
 	return string(runes[:max]) + "..."
+}
+
+func extractivePoints(transcript []domain.TranscriptSegment, max int) []string {
+	lines := make([]string, 0, len(transcript))
+	for _, segment := range transcript {
+		text := strings.TrimSpace(segment.Text)
+		if text != "" {
+			lines = append(lines, text)
+		}
+	}
+	if len(lines) == 0 || max <= 0 {
+		return []string{"No transcript content was available."}
+	}
+	if len(lines) <= max {
+		points := make([]string, len(lines))
+		for i, line := range lines {
+			points[i] = trimRunes(line, 120)
+		}
+		return points
+	}
+
+	points := make([]string, 0, max)
+	seen := map[int]bool{}
+	for i := 0; i < max; i++ {
+		idx := i * (len(lines) - 1) / (max - 1)
+		if seen[idx] {
+			continue
+		}
+		seen[idx] = true
+		points = append(points, trimRunes(lines[idx], 120))
+	}
+	return points
 }
