@@ -24,6 +24,10 @@ type JobStatsStore interface {
 	JobStats(ctx context.Context) (domain.JobStats, error)
 }
 
+type StaleJobRequeuer interface {
+	RequeueStaleRunningJobs(ctx context.Context, olderThan time.Duration) (int, error)
+}
+
 type CreateJobInput struct {
 	URL string
 }
@@ -76,6 +80,7 @@ type WorkerConfig struct {
 	WorkerID     string
 	PollInterval time.Duration
 	JobTimeout   time.Duration
+	RunningTTL   time.Duration
 	Logger       *slog.Logger
 }
 
@@ -85,6 +90,7 @@ type Worker struct {
 	workerID     string
 	pollInterval time.Duration
 	jobTimeout   time.Duration
+	runningTTL   time.Duration
 	logger       *slog.Logger
 }
 
@@ -101,6 +107,10 @@ func NewWorker(cfg WorkerConfig) *Worker {
 	if jobTimeout <= 0 {
 		jobTimeout = 30 * time.Minute
 	}
+	runningTTL := cfg.RunningTTL
+	if runningTTL <= 0 {
+		runningTTL = jobTimeout + 5*time.Minute
+	}
 	logger := cfg.Logger
 	if logger == nil {
 		logger = slog.Default()
@@ -111,6 +121,7 @@ func NewWorker(cfg WorkerConfig) *Worker {
 		workerID:     workerID,
 		pollInterval: pollInterval,
 		jobTimeout:   jobTimeout,
+		runningTTL:   runningTTL,
 		logger:       logger,
 	}
 }
@@ -137,6 +148,15 @@ func (w *Worker) Run(ctx context.Context) error {
 func (w *Worker) RunOnce(ctx context.Context) (bool, error) {
 	if w.store == nil || w.service == nil {
 		return false, errors.New("worker dependencies are not configured")
+	}
+	if requeuer, ok := w.store.(StaleJobRequeuer); ok {
+		requeued, err := requeuer.RequeueStaleRunningJobs(ctx, w.runningTTL)
+		if err != nil {
+			return false, err
+		}
+		if requeued > 0 {
+			w.logger.Warn("requeued stale running jobs", "count", requeued)
+		}
 	}
 	job, ok, err := w.store.ClaimNextJob(ctx, w.workerID)
 	if err != nil || !ok {

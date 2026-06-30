@@ -127,6 +127,29 @@ RETURNING id, source_url, status, result, error, attempts, created_at, started_a
 	return job, true, nil
 }
 
+func (s *PostgresJobStore) RequeueStaleRunningJobs(ctx context.Context, olderThan time.Duration) (int, error) {
+	if olderThan <= 0 {
+		return 0, nil
+	}
+	result, err := s.db.ExecContext(ctx, `
+UPDATE summary_jobs
+SET status = $1,
+	started_at = NULL,
+	updated_at = NOW(),
+	error = ''
+WHERE status = $2
+	AND updated_at < NOW() - ($3 * INTERVAL '1 second')
+`, string(domain.JobStatusQueued), string(domain.JobStatusRunning), int(olderThan.Seconds()))
+	if err != nil {
+		return 0, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(rows), nil
+}
+
 func (s *PostgresJobStore) CompleteJob(ctx context.Context, job domain.SummaryJob, result domain.SummaryResult) (domain.SummaryJob, error) {
 	payload, err := json.Marshal(result)
 	if err != nil {
@@ -196,14 +219,14 @@ type rowScanner interface {
 func scanJob(row rowScanner) (domain.SummaryJob, error) {
 	var job domain.SummaryJob
 	var status string
-	var resultBytes []byte
+	var resultText sql.NullString
 	var startedAt sql.NullTime
 	var finishedAt sql.NullTime
 	if err := row.Scan(
 		&job.ID,
 		&job.SourceURL,
 		&status,
-		&resultBytes,
+		&resultText,
 		&job.Error,
 		&job.Attempts,
 		&job.CreatedAt,
@@ -220,9 +243,9 @@ func scanJob(row rowScanner) (domain.SummaryJob, error) {
 	if finishedAt.Valid {
 		job.FinishedAt = &finishedAt.Time
 	}
-	if len(resultBytes) > 0 {
+	if resultText.Valid && resultText.String != "" {
 		var result domain.SummaryResult
-		if err := json.Unmarshal(resultBytes, &result); err != nil {
+		if err := json.Unmarshal([]byte(resultText.String), &result); err != nil {
 			return domain.SummaryJob{}, err
 		}
 		job.Result = &result

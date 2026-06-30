@@ -83,8 +83,11 @@ This starts:
 - `worker`: claims queued jobs, downloads media, runs ASR, and calls the summarizer.
 
 Resource controls are configured in `docker-compose.yml` with per-service `cpus`, `mem_limit`, `WORKER_CONCURRENCY`, `WORKER_POLL_INTERVAL`, and `JOB_TIMEOUT`.
+`RUNNING_JOB_TTL` controls how long a `running` job may remain stale before a worker requeues it after a crash or forced restart.
 
 Secrets and cookies are mounted through Docker secrets. Real files under `secrets/` are ignored by git; do not commit cookie exports or API tokens. The application also supports `SUMMARY_AUTH_TOKEN_FILE` and `ANTHROPIC_AUTH_TOKEN_FILE` for secret-file based deployments.
+
+If Docker Hub is rate-limited, set `GO_IMAGE` and `PYTHON_IMAGE` in `.env` to mirror images before running `docker compose`.
 
 ## Web Metadata Mode
 

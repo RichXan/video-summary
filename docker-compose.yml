@@ -16,7 +16,11 @@ services:
     cpus: "1.0"
 
   api:
-    build: .
+    build:
+      context: .
+      args:
+        GO_IMAGE: ${GO_IMAGE:-golang:1.25-bookworm}
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
     command: ["video-summary-api"]
     depends_on:
       postgres:
@@ -37,7 +41,11 @@ services:
     cpus: "1.0"
 
   worker:
-    build: .
+    build:
+      context: .
+      args:
+        GO_IMAGE: ${GO_IMAGE:-golang:1.25-bookworm}
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
     command: ["video-summary-worker"]
     depends_on:
       postgres:
@@ -50,6 +58,7 @@ services:
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
       WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL:-5s}
       JOB_TIMEOUT: ${JOB_TIMEOUT:-45m}
+      RUNNING_JOB_TTL: ${RUNNING_JOB_TTL:-50m}
 
       VIDEO_RESOLVER: mock
       MEDIA_PREPARER: command

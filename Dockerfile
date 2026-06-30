@@ -1,4 +1,7 @@
-FROM golang:1.25-bookworm AS go-builder
+ARG GO_IMAGE=golang:1.25-bookworm
+ARG PYTHON_IMAGE=python:3.12-slim
+
+FROM ${GO_IMAGE} AS go-builder
 
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -7,7 +10,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/video-summary-api ./cmd/server && \
     CGO_ENABLED=0 GOOS=linux go build -o /out/video-summary-worker ./cmd/worker
 
-FROM python:3.12-slim AS runtime
+FROM ${PYTHON_IMAGE} AS runtime
 
 ARG JIJI_REPO_URL=https://github.com/jiji262/douyin-downloader.git
 

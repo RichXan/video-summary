@@ -53,6 +53,7 @@ func main() {
 			WorkerID:     workerID,
 			PollInterval: cfg.WorkerPollInterval,
 			JobTimeout:   cfg.JobTimeout,
+			RunningTTL:   cfg.RunningJobTTL,
 			Logger:       slog.Default(),
 		})
 		go func() {

@@ -30,6 +30,7 @@ type Config struct {
 	WorkerConcurrency  int
 	WorkerPollInterval time.Duration
 	JobTimeout         time.Duration
+	RunningJobTTL      time.Duration
 	LogFormat          string
 }
 
@@ -58,6 +59,7 @@ func Load() Config {
 		WorkerConcurrency:  EnvInt("WORKER_CONCURRENCY", 1),
 		WorkerPollInterval: EnvDuration("WORKER_POLL_INTERVAL", 5*time.Second),
 		JobTimeout:         EnvDuration("JOB_TIMEOUT", 30*time.Minute),
+		RunningJobTTL:      EnvDuration("RUNNING_JOB_TTL", EnvDuration("JOB_TIMEOUT", 30*time.Minute)+5*time.Minute),
 		LogFormat:          env("LOG_FORMAT", "json"),
 	}
 }
