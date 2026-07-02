@@ -55,6 +55,30 @@ func TestLoadUsesAnthropicCompatibleSummaryEnv(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultsToPort13000(t *testing.T) {
+	t.Setenv("ADDR", "")
+
+	cfg := Load()
+
+	if cfg.Addr != ":13000" {
+		t.Fatalf("Addr = %q, want :13000", cfg.Addr)
+	}
+}
+
+func TestLoadReadsAPIKeyFromFile(t *testing.T) {
+	path := t.TempDir() + "/api-key.txt"
+	if err := os.WriteFile(path, []byte("local-api-key\n"), 0o600); err != nil {
+		t.Fatalf("write api key: %v", err)
+	}
+	t.Setenv("API_KEY_FILE", path)
+
+	cfg := Load()
+
+	if cfg.APIKey != "local-api-key" {
+		t.Fatalf("APIKey = %q", cfg.APIKey)
+	}
+}
+
 func TestLoadPrefersExplicitSummaryEnvOverAnthropicEnv(t *testing.T) {
 	t.Setenv("SUMMARY_BASE_URL", "http://localhost:11434")
 	t.Setenv("SUMMARY_AUTH_TOKEN", "summary-token")

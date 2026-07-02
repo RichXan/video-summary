@@ -30,7 +30,11 @@ func main() {
 		jobs = httpapi.AppJobAdapter{Service: app.NewJobService(store)}
 	}
 
-	handler := httpapi.NewHandlerWithJobs(httpapi.AppAdapter{Service: service}, jobs)
+	handler := httpapi.NewHandlerWithOptions(httpapi.HandlerOptions{
+		Summary: httpapi.AppAdapter{Service: service},
+		Jobs:    jobs,
+		APIKey:  cfg.APIKey,
+	})
 
 	slog.Info("api listening", "addr", cfg.Addr, "mode", cfg.Mode, "video_resolver", cfg.VideoResolver, "media_preparer", cfg.MediaPreparer, "summary_mode", cfg.SummaryMode)
 	if err := http.ListenAndServe(cfg.Addr, handler.Routes()); err != nil {

@@ -40,6 +40,7 @@ type JobStatsService interface {
 type Handler struct {
 	service SummaryService
 	jobs    JobService
+	apiKey  string
 	mux     *http.ServeMux
 }
 
@@ -48,7 +49,17 @@ func NewHandler(service SummaryService) *Handler {
 }
 
 func NewHandlerWithJobs(service SummaryService, jobs JobService) *Handler {
-	h := &Handler{service: service, jobs: jobs, mux: http.NewServeMux()}
+	return NewHandlerWithOptions(HandlerOptions{Summary: service, Jobs: jobs})
+}
+
+type HandlerOptions struct {
+	Summary SummaryService
+	Jobs    JobService
+	APIKey  string
+}
+
+func NewHandlerWithOptions(options HandlerOptions) *Handler {
+	h := &Handler{service: options.Summary, jobs: options.Jobs, apiKey: strings.TrimSpace(options.APIKey), mux: http.NewServeMux()}
 	h.mux.HandleFunc("POST /api/v1/videos/summarize", h.summarize)
 	h.mux.HandleFunc("POST /api/v1/jobs", h.createJob)
 	h.mux.HandleFunc("GET /api/v1/jobs/{id}", h.getJob)
@@ -59,7 +70,28 @@ func NewHandlerWithJobs(service SummaryService, jobs JobService) *Handler {
 }
 
 func (h *Handler) Routes() http.Handler {
-	return h.mux
+	return h.withAPIKey(h.mux)
+}
+
+func (h *Handler) withAPIKey(next http.Handler) http.Handler {
+	if h.apiKey == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isProtectedPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if r.Header.Get("x-api-key") != h.apiKey {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "x-api-key is required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isProtectedPath(path string) bool {
+	return strings.HasPrefix(path, "/api/v1/") || path == "/metrics"
 }
 
 func (h *Handler) healthz(w http.ResponseWriter, r *http.Request) {

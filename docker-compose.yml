@@ -27,16 +27,19 @@ services:
         condition: service_healthy
     environment:
       APP_ROLE: api
-      ADDR: :8080
+      ADDR: :13000
+      API_KEY_FILE: /run/secrets/api_key
       DATABASE_URL: postgres://video_summary:video_summary@postgres:5432/video_summary?sslmode=disable
       LOG_FORMAT: json
     ports:
-      - "8080:8080"
+      - "13000:13000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=3).read()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:13000/readyz', timeout=3).read()"]
       interval: 15s
       timeout: 5s
       retries: 5
+    secrets:
+      - api_key
     mem_limit: 256m
     cpus: "1.0"
 
@@ -87,6 +90,8 @@ services:
     cpus: "4.0"
 
 secrets:
+  api_key:
+    file: ./secrets/api-key.txt
   douyin_cookies:
     file: ./secrets/douyin-cookies.txt
   llm_token:

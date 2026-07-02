@@ -21,7 +21,8 @@ go run ./cmd/server
 ```powershell
 Invoke-RestMethod `
   -Method Post `
-  -Uri http://localhost:8080/api/v1/videos/summarize `
+  -Uri http://localhost:13000/api/v1/videos/summarize `
+  -Headers @{"x-api-key"="<your api key>"} `
   -ContentType 'application/json' `
   -Body '{"url":"https://v.douyin.com/demo/"}'
 ```
@@ -35,7 +36,8 @@ Create a job:
 ```powershell
 Invoke-RestMethod `
   -Method Post `
-  -Uri http://localhost:8080/api/v1/jobs `
+  -Uri http://localhost:13000/api/v1/jobs `
+  -Headers @{"x-api-key"="<your api key>"} `
   -ContentType 'application/json; charset=utf-8' `
   -Body '{"url":"https://v.douyin.com/demo/"}'
 ```
@@ -43,7 +45,7 @@ Invoke-RestMethod `
 Check status:
 
 ```powershell
-Invoke-RestMethod http://localhost:8080/api/v1/jobs/<job_id>
+Invoke-RestMethod http://localhost:13000/api/v1/jobs/<job_id> -Headers @{"x-api-key"="<your api key>"}
 ```
 
 Operational endpoints:
@@ -59,6 +61,7 @@ Prepare local secrets:
 ```powershell
 Copy-Item .env.example .env
 New-Item -ItemType Directory -Force secrets
+Set-Content -Path secrets\api-key.txt -Value "<your public API key>"
 Copy-Item D:\Downloads\douyin-firefox-cookies.txt secrets\douyin-cookies.txt
 Set-Content -Path secrets\llm-token.txt -Value "<your relay token>"
 ```
@@ -85,7 +88,9 @@ This starts:
 Resource controls are configured in `docker-compose.yml` with per-service `cpus`, `mem_limit`, `WORKER_CONCURRENCY`, `WORKER_POLL_INTERVAL`, and `JOB_TIMEOUT`.
 `RUNNING_JOB_TTL` controls how long a `running` job may remain stale before a worker requeues it after a crash or forced restart.
 
-Secrets and cookies are mounted through Docker secrets. Real files under `secrets/` are ignored by git; do not commit cookie exports or API tokens. The application also supports `SUMMARY_AUTH_TOKEN_FILE` and `ANTHROPIC_AUTH_TOKEN_FILE` for secret-file based deployments.
+Requests to `/api/v1/*` and `/metrics` must include `x-api-key`; `/healthz` and `/readyz` remain public for health checks.
+
+Secrets and cookies are mounted through Docker secrets. Real files under `secrets/` are ignored by git; do not commit cookie exports or API tokens. The application also supports `API_KEY_FILE`, `SUMMARY_AUTH_TOKEN_FILE`, and `ANTHROPIC_AUTH_TOKEN_FILE` for secret-file based deployments.
 
 If Docker Hub is rate-limited, set `GO_IMAGE` and `PYTHON_IMAGE` in `.env` to mirror images before running `docker compose`.
 
@@ -103,7 +108,8 @@ Then call the API with a real short link:
 ```powershell
 Invoke-RestMethod `
   -Method Post `
-  -Uri http://localhost:8080/api/v1/videos/summarize `
+  -Uri http://localhost:13000/api/v1/videos/summarize `
+  -Headers @{"x-api-key"="<your api key>"} `
   -ContentType 'application/json; charset=utf-8' `
   -Body '{"url":"https://v.douyin.com/fZYSzDGCgcY/"}'
 ```
@@ -233,7 +239,8 @@ Call the API:
 ```powershell
 Invoke-RestMethod `
   -Method Post `
-  -Uri http://localhost:8080/api/v1/videos/summarize `
+  -Uri http://localhost:13000/api/v1/videos/summarize `
+  -Headers @{"x-api-key"="<your api key>"} `
   -ContentType 'application/json; charset=utf-8' `
   -Body '{"url":"https://www.douyin.com/video/7655554393391537802"}'
 ```

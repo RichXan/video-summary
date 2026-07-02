@@ -9,6 +9,7 @@ import (
 
 type Config struct {
 	Addr               string
+	APIKey             string
 	Role               string
 	DatabaseURL        string
 	Mode               string
@@ -37,7 +38,8 @@ type Config struct {
 func Load() Config {
 	summaryBaseURL := firstEnv("SUMMARY_BASE_URL", "ANTHROPIC_BASE_URL")
 	return Config{
-		Addr:               env("ADDR", ":8080"),
+		Addr:               env("ADDR", ":13000"),
+		APIKey:             firstSecret("API_KEY_FILE", "API_KEY"),
 		Role:               env("APP_ROLE", "api"),
 		DatabaseURL:        firstEnv("DATABASE_URL", "POSTGRES_DSN"),
 		Mode:               env("MODE", "mock"),

@@ -130,6 +130,71 @@ func TestHandlerMetricsIncludesJobStats(t *testing.T) {
 	}
 }
 
+func TestHandlerRejectsProtectedAPIsWithoutAPIKey(t *testing.T) {
+	t.Parallel()
+
+	handler := NewHandlerWithOptions(HandlerOptions{
+		Summary: fakeSummaryService{},
+		Jobs: fakeJobService{
+			job: domain.SummaryJob{ID: "job_123", Status: domain.JobStatusQueued},
+		},
+		APIKey: "secret-key",
+	})
+	tests := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodPost, path: "/api/v1/videos/summarize", body: `{"url":"https://v.douyin.com/demo/"}`},
+		{method: http.MethodPost, path: "/api/v1/jobs", body: `{"url":"https://v.douyin.com/demo/"}`},
+		{method: http.MethodGet, path: "/api/v1/jobs/job_123"},
+		{method: http.MethodGet, path: "/metrics"},
+	}
+
+	for _, tt := range tests {
+		req := httptest.NewRequest(tt.method, tt.path, bytes.NewBufferString(tt.body))
+		res := httptest.NewRecorder()
+
+		handler.Routes().ServeHTTP(res, req)
+
+		if res.Code != http.StatusUnauthorized {
+			t.Fatalf("%s %s status = %d, want %d", tt.method, tt.path, res.Code, http.StatusUnauthorized)
+		}
+	}
+}
+
+func TestHandlerAllowsProtectedAPIsWithAPIKey(t *testing.T) {
+	t.Parallel()
+
+	handler := NewHandlerWithOptions(HandlerOptions{
+		Summary: fakeSummaryService{result: domain.SummaryResult{Summary: domain.Summary{OneLine: "summary"}}},
+		APIKey:  "secret-key",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos/summarize", bytes.NewBufferString(`{"url":"https://v.douyin.com/demo/"}`))
+	req.Header.Set("x-api-key", "secret-key")
+	res := httptest.NewRecorder()
+
+	handler.Routes().ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", res.Code, http.StatusOK)
+	}
+}
+
+func TestHandlerLeavesHealthChecksPublicWhenAPIKeyConfigured(t *testing.T) {
+	t.Parallel()
+
+	handler := NewHandlerWithOptions(HandlerOptions{Summary: fakeSummaryService{}, APIKey: "secret-key"})
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	res := httptest.NewRecorder()
+
+	handler.Routes().ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", res.Code, http.StatusOK)
+	}
+}
+
 type fakeSummaryService struct {
 	result domain.SummaryResult
 }
