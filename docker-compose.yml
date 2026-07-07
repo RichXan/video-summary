@@ -21,6 +21,10 @@ services:
       args:
         GO_IMAGE: ${GO_IMAGE:-golang:1.25-bookworm}
         PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+        GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+        APT_DEBIAN_MIRROR: ${APT_DEBIAN_MIRROR:-http://mirrors.cloud.tencent.com/debian}
+        APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-http://mirrors.cloud.tencent.com/debian-security}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.cloud.tencent.com/pypi/simple}
     command: ["video-summary-api"]
     depends_on:
       postgres:
@@ -49,6 +53,10 @@ services:
       args:
         GO_IMAGE: ${GO_IMAGE:-golang:1.25-bookworm}
         PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+        GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+        APT_DEBIAN_MIRROR: ${APT_DEBIAN_MIRROR:-http://mirrors.cloud.tencent.com/debian}
+        APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-http://mirrors.cloud.tencent.com/debian-security}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.cloud.tencent.com/pypi/simple}
     command: ["video-summary-worker"]
     depends_on:
       postgres:
@@ -75,6 +83,9 @@ services:
       MODE: command
       ASR_COMMAND: python
       ASR_ARGS: scripts/transcribe_faster_whisper.py {audio} --model ${WHISPER_MODEL:-small} --language zh --device ${WHISPER_DEVICE:-cpu} --compute-type ${WHISPER_COMPUTE_TYPE:-int8}
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
+      HF_HUB_DISABLE_XET: ${HF_HUB_DISABLE_XET:-1}
+      HF_HOME: ${HF_HOME:-/data/work/.hf-cache}
 
       SUMMARY_MODE: ${SUMMARY_MODE:-http}
       SUMMARY_BASE_URL: ${SUMMARY_BASE_URL:-}
